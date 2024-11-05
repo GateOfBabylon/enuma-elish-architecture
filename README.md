@@ -19,12 +19,12 @@
 ###### Пример за HTTP екзекутор:
 ```ea
 executor:
-  name: "delete-resourse-if-exists"
+  name: "delete-resource-if-exists"
   type: "http"
   env:
     user: "my_username"
-    pass: &mycreds.password
-    id: &mycreds.clientId
+    pass: ${{mycreds.password}}
+    id: ${{mycreds.clientId}}
   tasks:
     - name: "ensure-token"
       method: "POST"
@@ -33,12 +33,14 @@ executor:
         Content-Type: "application/json"
       body: '{"username":${{user}}, "password":${{pass}}}'
       export: ${{token}}
+
     - name: "check-existing"
       method: "GET"
       url: "http://example.com/api/resource/${{id}}"
       headers:
         Authorization: "Bearer ${{token}}"
-      export: ${{exists}}   
+      export: ${{exists}}
+
     - name: "delete-by-id"
       method: "DELETE"
       condition: ${{exists}}
@@ -50,22 +52,23 @@ executor:
 ###### Пример за Python екзекутор (изпълняван в Docker контейнер):
 ```ea
 executor:
-  name: "bash-docker-execution"
-  type: "bash"
+  name: "py-docker-execution"
+  type: "py"
+  universe:
+    world: "docker.io/python-execution-image:latest"
+    secret: "python_execution_registry_credentials"
   env:
-    arg1: &config.type
-    arg2: &config.option
+    arg1: ${{config.type}}
+    arg2: ${{config.option}}
   tasks:
     - name: "install-curl"
       script: |
-        #!/bin/bash
-        echo "Starting task"
-        apt-get update
-        apt-get install -y curl
-        curl http://example.com
-        echo "Task completed”
-    - name: "do-the-script
-      script-path: "./run.sh ${{arg1}} ${{arg2}}"
+        import os
+        x = os.getenv("X")
+        print("Task completed: " + x)
+
+    - name: "do-the-script"
+      script-path: "./run.py ${{arg1}} ${{arg2}}"
       export: ${{result}}
 ```
 
