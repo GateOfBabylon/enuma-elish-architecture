@@ -198,10 +198,20 @@ executor:
       timeout: 5000  # Wait for 5 seconds
       retry: 3
 
-    - name: "confirm-or-reject-status"
+    - name: "process-status"
       if: ${{status == 'ready'}}
         method: "POST"
         url: "http://example.com/api/resources/${{resource_id}}/confirm"
+        headers:
+          Authorization: "Bearer ${{api_key}}"
+      elif: ${{status == 'pending'}}
+        method: "POST"
+        url: "http://example.com/api/resources/${{resource_id}}/queue-for-review"
+        headers:
+          Authorization: "Bearer ${{api_key}}"
+      elif: ${{status == 'error'}}
+        method: "POST"
+        url: "http://example.com/api/resources/${{resource_id}}/report-error"
         headers:
           Authorization: "Bearer ${{api_key}}"
       else:
