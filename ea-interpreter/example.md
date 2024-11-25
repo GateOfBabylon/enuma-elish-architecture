@@ -113,7 +113,7 @@ executor:
       headers:
         Authorization: "Bearer ${{api_key}}"
       export: ${{user_data}}
-      delay: 2000  # Задръжка от 2 секунди преди изпълнение
+      delay: 2000
 
     - name: "fetch-order-history"
       method: "GET"
@@ -121,7 +121,7 @@ executor:
       headers:
         Authorization: "Bearer ${{api_key}}"
       export: ${{order_history}}
-      timeout: 5000  # Тайм-аут от 5 секунди за изпълнение
+      timeout: 5000
 
     - name: "fetch-payment-info"
       method: "GET"
@@ -129,7 +129,7 @@ executor:
       headers:
         Authorization: "Bearer ${{api_key}}"
       export: ${{payment_info}}
-      delay: 2000  # Задръжка от 2 секунди преди изпълнение
+      delay: 2000
 
     - name: "send-success-notification"
       condition: ${{user_data && order_history && payment_info}}
@@ -148,7 +148,7 @@ executor:
       body: '{"email":${{alert_email}}, "message":"Data collection incomplete"}'
 ```
 
-### Пример 4: Масово изтриване на ресурси с loop
+### Пример 4: Масово изтриване на ресурси с iterate
 
 Този екзекутор изпълнява последователност от изтриване на множество ресурси, ако са намерени, като ползва предишен резултат за избор на ресурси.
 
@@ -159,18 +159,18 @@ executor:
   env:
     api_key: "another_secret_key"
   tasks:
-  - name: "list-resources"
-    method: "GET"
-    url: "http://example.com/api/resources"
-    headers:
-      Authorization: "Bearer ${{api_key}}"
-    export: ${{resource_list}}
-  - name: "delete-resources"
-    loop: ${{resource_list}}
-    method: "DELETE"
-    url: "http://example.com/api/resources/${{item}}"
-    headers:
-      Authorization: "Bearer ${{api_key}}"
+    - name: "list-resources"
+      method: "GET"
+      url: "http://example.com/api/resources"
+      headers:
+        Authorization: "Bearer ${{api_key}}"
+      export: "${{resource_list}}"
+    - name: "delete-resources"
+      iterate: "${{resource_list}}"
+      method: "DELETE"
+      url: "http://example.com/api/resources/${{item}}"
+      headers:
+        Authorization: "Bearer ${{api_key}}"
 ```
 
 ### Пример 5: Потвърждение на статус на ресурс
@@ -190,35 +190,35 @@ executor:
       url: "http://example.com/api/resources/${{resource_id}}/status"
       headers:
         Authorization: "Bearer ${{api_key}}"
-      export: ${{status}}
+      export: "${{status}}"
 
     - name: "wait-for-ready"
-      method: "WAIT"
-      condition: ${{status != 'ready'}}
-      timeout: 5000  # Wait for 5 seconds
+      condition: "${{status != 'ready'}}"
+      timeout: 5000
       retry: 3
 
     - name: "process-status"
-      if: ${{status == 'ready'}}
-        method: "POST"
-        url: "http://example.com/api/resources/${{resource_id}}/confirm"
-        headers:
-          Authorization: "Bearer ${{api_key}}"
-      elif: ${{status == 'pending'}}
-        method: "POST"
-        url: "http://example.com/api/resources/${{resource_id}}/queue-for-review"
-        headers:
-          Authorization: "Bearer ${{api_key}}"
-      elif: ${{status == 'error'}}
-        method: "POST"
-        url: "http://example.com/api/resources/${{resource_id}}/report-error"
-        headers:
-          Authorization: "Bearer ${{api_key}}"
+      try:
+        - if: "${{status == 'ready'}}"
+          method: "POST"
+          url: "http://example.com/api/resources/${{resource_id}}/confirm"
+          headers:
+            Authorization: "Bearer ${{api_key}}"
+        - if: "${{status == 'pending'}}"
+          method: "POST"
+          url: "http://example.com/api/resources/${{resource_id}}/queue-for-review"
+          headers:
+            Authorization: "Bearer ${{api_key}}"
+        - if: "${{status == 'error'}}"
+          method: "POST"
+          url: "http://example.com/api/resources/${{resource_id}}/report-error"
+          headers:
+            Authorization: "Bearer ${{api_key}}"
       else:
         method: "POST"
         url: "http://example.com/api/resources/${{resource_id}}/reject"
         headers:
-          Authorization: "Bearer ${{api_key}}"
+            Authorization: "Bearer ${{api_key}}"
 ```
 
 ### Пример 6: Извличане на списък, паралелно събиране на данни и обработка на всеки елемент
@@ -237,28 +237,28 @@ executor:
       url: "http://example.com/api/items"
       headers:
         Authorization: "Bearer ${{api_key}}"
-      export: ${{items}}
+      export: "${{items}}"
 
     - name: "fetch-additional-data-parallel"
       parallel:
         - name: "fetch-item-details"
-          loop: ${{items}}
+          iterate: "${{items}}"
           method: "GET"
           url: "http://example.com/api/items/${{item.id}}/details"
           headers:
             Authorization: "Bearer ${{api_key}}"
-          export: ${{item.details}}
+          export: "${{item.details}}"
 
         - name: "fetch-item-stats"
-          loop: ${{items}}
+          iterate: "${{items}}"
           method: "GET"
           url: "http://example.com/api/items/${{item.id}}/stats"
           headers:
             Authorization: "Bearer ${{api_key}}"
-          export: ${{item.stats}}
+          export: "${{item.stats}}"
 
     - name: "process-each-item"
-      loop: ${{items}}
+      iterate: "${{items}}"
       method: "POST"
       url: "http://example.com/api/process/${{item.id}}"
       headers:
@@ -289,14 +289,15 @@ executor:
         import os
         exists = os.path.isfile("${{file_path}}")
         print("File exists:", exists)
-      export: ${{file_exists}}
+      export: "${{file_exists}}"
 
     - name: "create-file"
-      condition: !${{file_exists}}
-      script: |
-        with open("${{file_path}}", "w") as f:
-            f.write("${{content}}")
-        print("File created with default content.")
+      try:
+        - if: "!${{file_exists}}"
+        script: |
+            with open("${{file_path}}", "w") as f:
+                f.write("${{content}}")
+            print("File created with default content.")
 ```
 
 ### Пример 2: Изпълнение на основен Python скрипт с параметри
@@ -315,8 +316,9 @@ executor:
     arg2: "run_analysis"
   tasks:
     - name: "execute-main-script"
-      script-path: "./scripts/main_script.py ${{arg1}} ${{arg2}}"
-      export: ${{output}}
+      scriptPath: "./scripts/main_script.py ${{arg1}} ${{arg2}}"
+      export: "${{output}}"
+
     - name: "log-result"
       script: |
         print("Script output:", "${{output}}")
@@ -338,31 +340,30 @@ executor:
   tasks:
     - name: "fetch-user-data"
       script: |
-        user_data = {"name": "John", "id": 123}  # Симулирано събиране на данни
+        user_data = {"name": "John", "id": 123}
         print("User data fetched.")
-      export: ${{user_data}}
+      export: "${{user_data}}"
 
     - name: "fetch-order-history"
       script: |
-        order_history = ["order1", "order2"]  # Симулирано събиране на данни
+        order_history = ["order1", "order2"]
         print("Order history fetched.")
-      export: ${{order_history}}
+      export: "${{order_history}}"
 
     - name: "fetch-payment-info"
       script: |
-        payment_info = {"last_payment": "2023-10-05"}  # Симулирано събиране на данни
+        payment_info = {"last_payment": "2023-10-05"}
         print("Payment info fetched.")
-      export: ${{payment_info}}
+      export: "${{payment_info}}"
 
-    - name: "send-success-notification"
-      condition: ${{user_data && order_history && payment_info}}
-      script: |
-        print("Data collection complete. Sending success notification to:", "${{alert_email}}")
-
-    - name: "send-error-notification"
-      condition: !${{user_data && order_history && payment_info}}
-      script: |
-        print("Data collection incomplete. Sending error notification to:", "${{alert_email}}")
+    - name: "send-notification"
+      try:
+        - if: "${{user_data && order_history && payment_info}}"
+          script: |
+            print("Data collection complete. Sending success notification to:", "${{alert_email}}")
+        - if: "!${{user_data && order_history && payment_info}}"
+          script: |
+            print("Data collection incomplete. Sending error notification to:", "${{alert_email}}")
 ```
 
 ### Пример 4: Паралелно изпълнение на скриптове и обработка на всеки елемент в списък
@@ -380,24 +381,24 @@ executor:
     items: [{"id": 1}, {"id": 2}, {"id": 3}]
   tasks:
     - name: "fetch-item-list"
-      script-path: "./scripts/load_items.py"
-      export: ${{items}}
+      scriptPath: "./scripts/load_items.py"
+      export: "${{items}}"
 
     - name: "fetch-additional-data-parallel"
       parallel:
         - name: "fetch-item-details"
-          loop: ${{items}}
-          script-path: "./scripts/fetch_item_details.py ${{item.id}}"
-          export: ${{item.details}}
+          iterate: "${{items}}"
+          scriptPath: "./scripts/fetch_item_details.py ${{item.id}}"
+          export: "${{item.details}}"
 
         - name: "fetch-item-stats"
-          loop: ${{items}}
-          script-path: "./scripts/fetch_item_stats.py ${{item.id}}"
-          export: ${{item.stats}}
+          iterate: "${{items}}"
+          scriptPath: "./scripts/fetch_item_stats.py ${{item.id}}"
+          export: "${{item.stats}}"
 
     - name: "process-each-item"
-      loop: ${{items}}
-      script-path: "./scripts/process_item.py ${{item.id}} ${{item.details}} ${{item.stats}}"
+      iterate: "${{items}}"
+      scriptPath: "./scripts/process_item.py ${{item.id}} ${{item.details}} ${{item.stats}}"
 ```
 
 ### Пример 5: Проверка за статус и изпълнение на Python скрипт при различни условия
@@ -409,21 +410,29 @@ executor:
   name: "confirm-or-reject-status"
   type: "py"
   universe:
-    world: "docker.io/my-docker-image:latest" 
+    world: "docker.io/my-docker-image:latest"
     secret: "my_docker_registry_credentials"
   env:
     status: "pending"
   tasks:
     - name: "check-status"
-      script-path: "./scripts/check_status.py"
+      scriptPath: "./scripts/check_status.py"
       export: ${{status}}
 
     - name: "wait-for-ready"
-      script-path: "./scripts/wait_for_ready.py ${{status}}"
+      scriptPath: "./scripts/wait_for_ready.py ${{status}}"
 
     - name: "confirm-or-reject"
-      if: ${{status == 'ready'}}
-      script-path: "./scripts/confirm_resource.py"
+      try:
+        - if: ${{status == 'ready'}}
+          task:
+            scriptPath: "./scripts/confirm_resource.py"
+        - if: ${{status == 'pending'}}
+          task:
+            scriptPath: "./scripts/queue_resource_for_review.py"
+        - if: ${{status == 'error'}}
+          task:
+            scriptPath: "./scripts/report_resource_error.py"
       else:
-      script-path: "./scripts/reject_resource.py"
+        scriptPath: "./scripts/reject_resource.py"
 ```
